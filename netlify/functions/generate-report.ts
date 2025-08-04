@@ -85,7 +85,7 @@ Include:
 Format as markdown with clear sections and bullet points.`
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: "Generate a comprehensive healthcare analytics report" }
