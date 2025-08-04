@@ -1,8 +1,5 @@
 import { Handler } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
-import multiparty from 'multiparty'
-import csv from 'csv-parser'
-import { Readable } from 'stream'
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -30,116 +27,120 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
-    // Parse multipart form data
-    const form = new multiparty.Form()
-    
-    return new Promise((resolve) => {
-      form.parse(event.body, async (err, fields, files) => {
-        if (err) {
-          resolve({
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: 'Failed to parse form data' }),
-          })
-          return
+    // Parse the form data from the request body
+    const boundary = event.headers['content-type']?.split('boundary=')[1]
+    if (!boundary) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'No boundary found in content-type' }),
+      }
+    }
+
+    const body = event.isBase64Encoded ? 
+      Buffer.from(event.body || '', 'base64').toString() : 
+      event.body || ''
+
+    // Simple multipart parser
+    const parts = body.split(`--${boundary}`)
+    let dataType = ''
+    let csvContent = ''
+
+    for (const part of parts) {
+      if (part.includes('name="dataType"')) {
+        const lines = part.split('\r\n')
+        dataType = lines[lines.length - 2] || ''
+      } else if (part.includes('name="csvFile"')) {
+        const contentStart = part.indexOf('\r\n\r\n')
+        if (contentStart !== -1) {
+          csvContent = part.substring(contentStart + 4).replace(/\r\n$/, '')
         }
+      }
+    }
 
-        const dataType = fields.dataType?.[0]
-        const csvFile = files.csvFile?.[0]
+    if (!dataType || !csvContent) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ 
+          error: 'Missing data type or file content',
+          debug: { dataType, hasContent: !!csvContent }
+        }),
+      }
+    }
 
-        if (!dataType || !csvFile) {
-          resolve({
-            statusCode: 400,
-            headers,
-            body: JSON.stringify({ error: 'Missing data type or file' }),
-          })
-          return
-        }
-
-        try {
-          // Read and parse CSV
-          const csvData = csvFile.buffer || csvFile.path
-          const results: any[] = []
-          
-          const stream = Readable.from(csvData.toString())
-          
-          stream
-            .pipe(csv())
-            .on('data', (data) => results.push(data))
-            .on('end', async () => {
-              try {
-                let recordsProcessed = 0
-
-                if (dataType === 'patients') {
-                  const patients = results.map(row => ({
-                    patient_id: row.patient_id || row.PatientID || row.id,
-                    age: parseInt(row.age) || null,
-                    gender: row.gender || row.Gender,
-                    diagnosis: row.diagnosis || row.Diagnosis,
-                    medications: row.medications || row.Medications,
-                    admission_date: row.admission_date || row.AdmissionDate || row.admission,
-                    discharge_date: row.discharge_date || row.DischargeDate || row.discharge,
-                  }))
-
-                  const { error } = await supabase
-                    .from('patients')
-                    .upsert(patients)
-
-                  if (error) throw error
-                  recordsProcessed = patients.length
-
-                } else if (dataType === 'inventory') {
-                  const inventory = results.map(row => ({
-                    drug_name: row.drug_name || row.DrugName || row.name,
-                    quantity: parseInt(row.quantity || row.Quantity || row.stock) || 0,
-                    unit_cost: parseFloat(row.unit_cost || row.UnitCost || row.cost) || 0,
-                    expiry_date: row.expiry_date || row.ExpiryDate || row.expiry,
-                    supplier: row.supplier || row.Supplier,
-                    category: row.category || row.Category || 'General',
-                  }))
-
-                  const { error } = await supabase
-                    .from('inventory')
-                    .upsert(inventory)
-
-                  if (error) throw error
-                  recordsProcessed = inventory.length
-                }
-
-                resolve({
-                  statusCode: 200,
-                  headers,
-                  body: JSON.stringify({
-                    message: `Successfully processed ${recordsProcessed} ${dataType} records`,
-                    recordsProcessed,
-                    dataType,
-                  }),
-                })
-              } catch (error) {
-                console.error('Database error:', error)
-                resolve({
-                  statusCode: 500,
-                  headers,
-                  body: JSON.stringify({ error: 'Database operation failed' }),
-                })
-              }
-            })
-        } catch (error) {
-          console.error('CSV parsing error:', error)
-          resolve({
-            statusCode: 500,
-            headers,
-            body: JSON.stringify({ error: 'Failed to process CSV file' }),
-          })
-        }
+    // Parse CSV content
+    const lines = csvContent.trim().split('\n')
+    const headers_csv = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+    const rows = lines.slice(1).map(line => {
+      const values = line.split(',').map(v => v.trim().replace(/"/g, ''))
+      const row: any = {}
+      headers_csv.forEach((header, index) => {
+        row[header] = values[index] || ''
       })
+      return row
     })
+
+    let recordsProcessed = 0
+
+    if (dataType === 'patients') {
+      const patients = rows.map(row => ({
+        patient_id: row.patient_id || row.PatientID || row.id,
+        age: parseInt(row.age) || null,
+        gender: row.gender || row.Gender,
+        diagnosis: row.diagnosis || row.Diagnosis,
+        medications: row.medications || row.Medications,
+        admission_date: row.admission_date || row.AdmissionDate || row.admission,
+        discharge_date: row.discharge_date || row.DischargeDate || row.discharge,
+      })).filter(p => p.patient_id) // Only include rows with patient_id
+
+      if (patients.length > 0) {
+        const { error } = await supabase
+          .from('patients')
+          .upsert(patients, { onConflict: 'patient_id' })
+
+        if (error) throw error
+        recordsProcessed = patients.length
+      }
+
+    } else if (dataType === 'inventory') {
+      const inventory = rows.map(row => ({
+        drug_name: row.drug_name || row.DrugName || row.name,
+        quantity: parseInt(row.quantity || row.Quantity || row.stock) || 0,
+        unit_cost: parseFloat(row.unit_cost || row.UnitCost || row.cost) || 0,
+        expiry_date: row.expiry_date || row.ExpiryDate || row.expiry,
+        supplier: row.supplier || row.Supplier,
+        category: row.category || row.Category || 'General',
+      })).filter(i => i.drug_name) // Only include rows with drug_name
+
+      if (inventory.length > 0) {
+        const { error } = await supabase
+          .from('inventory')
+          .upsert(inventory, { onConflict: 'drug_name' })
+
+        if (error) throw error
+        recordsProcessed = inventory.length
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers,
+      body: JSON.stringify({
+        message: `Successfully processed ${recordsProcessed} ${dataType} records`,
+        recordsProcessed,
+        dataType,
+      }),
+    }
   } catch (error) {
     console.error('Upload error:', error)
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: 'Upload failed' }),
+      body: JSON.stringify({ 
+        error: 'Upload failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }),
     }
   }
 }
