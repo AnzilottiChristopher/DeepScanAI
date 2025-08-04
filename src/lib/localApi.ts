@@ -11,6 +11,12 @@ export const localApi = {
     return mockStats;
   },
 
+  // Get patients
+  async getPatients() {
+    await delay(500);
+    return mockPatients;
+  },
+
   // Upload CSV (mock)
   async uploadCsv(formData: FormData) {
     await delay(1000);

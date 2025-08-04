@@ -21,6 +21,17 @@ interface AnalyticsResult {
   efficiency_score?: string;
 }
 
+interface Patient {
+  id: number;
+  patient_id: string;
+  age?: number;
+  gender?: string;
+  diagnosis?: string;
+  medications?: string;
+  admission_date?: string;
+  discharge_date?: string;
+  created_at?: string;
+}
 interface ChatMessage {
   id: string;
   text: string;
@@ -37,6 +48,8 @@ function App() {
   const [stats, setStats] = useState<Stats>({ patients: 0, inventory: 0 });
   const [uploadStatus, setUploadStatus] = useState<string>('');
   const [analytics, setAnalytics] = useState<AnalyticsResult>({});
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loadingPatients, setLoadingPatients] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -73,6 +86,24 @@ function App() {
     }
   };
 
+  const fetchPatients = async () => {
+    setLoadingPatients(true);
+    try {
+      let data;
+      if (isLocalMode) {
+        data = await localApi.getPatients();
+      } else {
+        const response = await fetch('/.netlify/functions/patients');
+        data = await response.json();
+      }
+      setPatients(data);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+      setPatients([]);
+    } finally {
+      setLoadingPatients(false);
+    }
+  };
   const handleFileUpload = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -94,6 +125,10 @@ function App() {
       if (result.recordsProcessed) {
         setUploadStatus(`Success: ${result.recordsProcessed} records processed`);
         fetchStats();
+        // Refresh patients data if we uploaded patient data
+        if (result.dataType === 'patients') {
+          fetchPatients();
+        }
       } else {
         setUploadStatus(`Error: ${result.error}`);
       }
@@ -279,6 +314,7 @@ function App() {
           <div className="flex space-x-8">
             {[
               { id: 'dashboard', name: 'Dashboard', icon: BarChart3 },
+              { id: 'patients', name: 'Patients', icon: Activity },
               { id: 'upload', name: 'Data Upload', icon: Upload },
               { id: 'analytics', name: 'Analytics', icon: TrendingUp },
               { id: 'assistant', name: 'AI Assistant', icon: MessageCircle },
@@ -422,6 +458,119 @@ function App() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'patients' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">Patient Records</h2>
+                <p className="text-gray-600">View and manage patient data</p>
+              </div>
+              <button
+                onClick={fetchPatients}
+                disabled={loadingPatients}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-2"
+              >
+                <Activity className="h-4 w-4" />
+                <span>{loadingPatients ? 'Loading...' : 'Refresh Data'}</span>
+              </button>
+            </div>
+
+            {patients.length === 0 && !loadingPatients && (
+              <div className="bg-white rounded-xl shadow-md p-8 text-center border border-gray-100">
+                <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No Patient Data</h3>
+                <p className="text-gray-600 mb-4">
+                  Upload patient CSV files to view data here
+                </p>
+                <button
+                  onClick={() => setActiveTab('upload')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                >
+                  Upload Patient Data
+                </button>
+              </div>
+            )}
+
+            {loadingPatients && (
+              <div className="bg-white rounded-xl shadow-md p-8 text-center border border-gray-100">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading patient data...</p>
+              </div>
+            )}
+
+            {patients.length > 0 && !loadingPatients && (
+              <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Patient Records ({patients.length} total)
+                  </h3>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Patient ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Age
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Gender
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Diagnosis
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Medications
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Admission
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Discharge
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {patients.map((patient) => (
+                        <tr key={patient.id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            {patient.patient_id}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {patient.age || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {patient.gender || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {patient.diagnosis || 'Not specified'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                            <div className="truncate" title={patient.medications || ''}>
+                              {patient.medications || '-'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {patient.admission_date || '-'}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {patient.discharge_date || '-'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
