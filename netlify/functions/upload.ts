@@ -172,32 +172,3 @@ export const handler: Handler = async (event, context) => {
     }
   }
 }
-          .from('inventory')
-          .upsert(inventory, { onConflict: 'drug_name' })
-
-        if (error) throw error
-        recordsProcessed = inventory.length
-      }
-    }
-
-    return {
-      statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        message: `Successfully processed ${recordsProcessed} ${dataType} records`,
-        recordsProcessed,
-        dataType,
-      }),
-    }
-  } catch (error) {
-    console.error('Upload error:', error)
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ 
-        error: 'Upload failed',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      }),
-    }
-  }
-}
