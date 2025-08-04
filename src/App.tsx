@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, Database, Brain, BarChart3, MessageCircle, FileText, TrendingUp, AlertTriangle, DollarSign, Activity } from 'lucide-react';
+import { localApi } from './lib/localApi';
+
+// Check if we're in local development mode (no Supabase URL)
+const isLocalMode = !import.meta.env.VITE_SUPABASE_URL;
 
 interface Stats {
   patients: number;
@@ -56,8 +60,13 @@ function App() {
 
   const fetchStats = async () => {
     try {
-      const response = await fetch('/api/stats');
-      const data = await response.json();
+      let data;
+      if (isLocalMode) {
+        data = await localApi.getStats();
+      } else {
+        const response = await fetch('/.netlify/functions/stats');
+        data = await response.json();
+      }
       setStats(data);
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -71,14 +80,18 @@ function App() {
     setUploadStatus('Uploading...');
     
     try {
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      let result;
+      if (isLocalMode) {
+        result = await localApi.uploadCsv(formData);
+      } else {
+        const response = await fetch('/.netlify/functions/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        result = await response.json();
+      }
       
-      const result = await response.json();
-      
-      if (response.ok) {
+      if (result.recordsProcessed) {
         setUploadStatus(`Success: ${result.recordsProcessed} records processed`);
         fetchStats();
       } else {
@@ -91,8 +104,41 @@ function App() {
 
   const runAnalytics = async (type: string) => {
     try {
-      const response = await fetch(`/api/analytics/${type}`);
-      const data = await response.json();
+      let data;
+      
+      if (isLocalMode) {
+        switch(type) {
+          case 'inventory-optimization':
+            data = await localApi.getInventoryAnalytics();
+            break;
+          case 'drug-demand-prediction':
+            data = await localApi.getDemandPrediction();
+            break;
+          case 'cost-optimization':
+            data = await localApi.getCostOptimization();
+            break;
+          default:
+            throw new Error(`Unknown analytics type: ${type}`);
+        }
+      } else {
+        let endpoint = '';
+        switch(type) {
+          case 'inventory-optimization':
+            endpoint = '/.netlify/functions/analytics-inventory';
+            break;
+          case 'drug-demand-prediction':
+            endpoint = '/.netlify/functions/analytics-demand';
+            break;
+          case 'cost-optimization':
+            endpoint = '/.netlify/functions/analytics-cost';
+            break;
+          default:
+            endpoint = `/.netlify/functions/analytics-${type}`;
+        }
+        const response = await fetch(endpoint);
+        data = await response.json();
+      }
+      
       setAnalytics(prev => ({ ...prev, [type]: data }));
     } catch (error) {
       console.error('Error running analytics:', error);
@@ -113,18 +159,23 @@ function App() {
     setCurrentMessage('');
 
     try {
-      const response = await fetch('/api/assistant/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: currentMessage,
-          context: { stats, analytics }
-        }),
-      });
 
-      const result = await response.json();
+      let result;
+      if (isLocalMode) {
+        result = await localApi.sendChatMessage(currentMessage);
+      } else {
+        const response = await fetch('/.netlify/functions/ai-chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: currentMessage,
+            context: { stats, analytics }
+          }),
+        });
+        result = await response.json();
+      }
       
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -158,14 +209,18 @@ function App() {
 
   const generateReport = async () => {
     try {
-      const response = await fetch('/api/generate-report', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      const result = await response.json();
+      let result;
+      if (isLocalMode) {
+        result = await localApi.generateReport();
+      } else {
+        const response = await fetch('/.netlify/functions/generate-report', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        result = await response.json();
+      }
       
       const reportMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -209,6 +264,9 @@ function App() {
                 <p className="text-lg font-semibold text-gray-900">
                   {stats.patients + stats.inventory} total
                 </p>
+                {isLocalMode && (
+                  <p className="text-xs text-orange-600">Local Mode</p>
+                )}
               </div>
             </div>
           </div>
@@ -338,13 +396,13 @@ function App() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Database Connection</span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Connected
+                      {isLocalMode ? 'Local Mode' : 'Connected'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">AI Engine</span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      Active
+                      {isLocalMode ? 'Mock Mode' : 'Active'}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -353,6 +411,14 @@ function App() {
                       Ready
                     </span>
                   </div>
+                  {isLocalMode && (
+                    <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                      <p className="text-sm text-orange-800">
+                        <strong>Local Development Mode</strong><br/>
+                        Using mock data. Set VITE_SUPABASE_URL to connect to real database.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -412,6 +478,11 @@ function App() {
                     : 'bg-red-50 text-red-700 border border-red-200'
                 }`}>
                   {uploadStatus}
+                  {isLocalMode && uploadStatus.includes('Success') && (
+                    <p className="text-sm mt-2 text-green-600">
+                      Note: Running in local mode with mock data processing
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -757,10 +828,14 @@ function App() {
                 <div className="flex items-start space-x-3">
                   <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-medium text-yellow-800">AI Configuration Required</h4>
+                    <h4 className="text-sm font-medium text-yellow-800">
+                      {isLocalMode ? 'Local Development Mode' : 'AI Configuration Required'}
+                    </h4>
                     <p className="text-sm text-yellow-700 mt-1">
-                      To use AI-powered features, you need to configure your OpenAI API key in the server environment. 
-                      The system will generate Python code dynamically based on your queries.
+                      {isLocalMode 
+                        ? 'Currently running with mock data. Connect to Supabase and configure OpenAI API for full functionality.'
+                        : 'To use AI-powered features, you need to configure your OpenAI API key in the server environment.'
+                      }
                     </p>
                   </div>
                 </div>

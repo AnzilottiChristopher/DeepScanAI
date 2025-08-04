@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "server": "node server/index.cjs",
-    "dev:full": "concurrently \"npm run dev\" \"npm run server\" --names \"frontend,backend\" --prefix-colors \"blue,green\" --kill-others-on-fail"
+    "dev:netlify": "netlify dev",
+    "build:functions": "netlify build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.53.0",
     "cors": "^2.8.5",
     "csv-parser": "^3.0.0",
     "dotenv": "^17.2.1",
@@ -18,6 +19,7 @@
     "helmet": "^8.0.0",
     "lucide-react": "^0.344.0",
     "multer": "^1.4.5-lts.1",
+    "multiparty": "^4.2.3",
     "openai": "^5.11.0",
     "python-shell": "^5.0.0",
     "react": "^18.3.1",
@@ -36,6 +38,7 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
     "globals": "^15.9.0",
+    "netlify-cli": "^23.0.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.5.3",
