@@ -185,8 +185,10 @@ export const handler: Handler = async (event, context) => {
     console.error('Upload error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
-      dataType,
-      csvContentLength: csvContent?.length || 0
+      dataType: dataType || 'unknown',
+      bodyLength: event.body?.length || 0,
+      hasBody: !!event.body,
+      contentType: event.headers['content-type'] || 'unknown'
     })
     
     return {
@@ -195,7 +197,11 @@ export const handler: Handler = async (event, context) => {
       body: JSON.stringify({ 
         error: 'Upload failed',
         details: error instanceof Error ? error.message : 'Unknown error',
-        dataType
+        debug: {
+          hasBody: !!event.body,
+          contentType: event.headers['content-type'],
+          bodyLength: event.body?.length || 0
+        }
       }),
     }
   }
