@@ -58,6 +58,8 @@ export const handler: Handler = async (event, context) => {
       }
     }
 
+    console.log('Parsed form data:', { dataType, csvContentLength: csvContent.length })
+
     if (!dataType || !csvContent) {
       return {
         statusCode: 400,
@@ -71,7 +73,11 @@ export const handler: Handler = async (event, context) => {
 
     // Parse CSV content
     const lines = csvContent.trim().split('\n')
+    console.log('CSV lines count:', lines.length)
+    
     const headers_csv = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+    console.log('CSV headers:', headers_csv)
+    
     const rows = lines.slice(1).map(line => {
       const values = line.split(',').map(v => v.trim().replace(/"/g, ''))
       const row: any = {}
@@ -80,6 +86,9 @@ export const handler: Handler = async (event, context) => {
       })
       return row
     })
+
+    console.log('Parsed rows count:', rows.length)
+    console.log('First row sample:', rows[0])
 
     let recordsProcessed = 0
 
@@ -113,6 +122,9 @@ export const handler: Handler = async (event, context) => {
         category: row.category || row.Category || 'General',
       })).filter(i => i.drug_name) // Only include rows with drug_name
 
+      console.log('Processed inventory items:', inventory.length)
+      console.log('First inventory item:', inventory[0])
+
       if (inventory.length > 0) {
         // Insert inventory items one by one to handle conflicts better
         let successCount = 0
@@ -120,19 +132,25 @@ export const handler: Handler = async (event, context) => {
         
         for (const item of inventory) {
           try {
+            console.log('Processing item:', item.drug_name)
             const { error } = await supabase
               .from('inventory')
               .upsert(item, { onConflict: 'drug_name' })
             
             if (error) {
+              console.error('Supabase error for', item.drug_name, ':', error)
               errors.push(`${item.drug_name}: ${error.message}`)
             } else {
+              console.log('Successfully processed:', item.drug_name)
               successCount++
             }
           } catch (err) {
+            console.error('Exception for', item.drug_name, ':', err)
             errors.push(`${item.drug_name}: ${err instanceof Error ? err.message : 'Unknown error'}`)
           }
         }
+        
+        console.log('Final results:', { successCount, errorCount: errors.length })
         
         if (errors.length > 0) {
           console.error('Inventory upload errors:', errors)
@@ -142,9 +160,12 @@ export const handler: Handler = async (event, context) => {
         
         // If no records were processed, throw an error with details
         if (successCount === 0) {
-          throw new Error(`No inventory records processed. Errors: ${errors.slice(0, 3).join('; ')}`)
+          const errorDetails = errors.slice(0, 5).join('; ')
+          console.error('All inventory records failed:', errorDetails)
+          throw new Error(`No inventory records processed. Errors: ${errorDetails}`)
         }
       } else {
+        console.error('No valid inventory records found')
         throw new Error('No valid inventory records found in CSV. Check that drug_name column exists.')
       }
     } else {
@@ -161,13 +182,20 @@ export const handler: Handler = async (event, context) => {
       }),
     }
   } catch (error) {
-    console.error('Upload error:', error)
+    console.error('Upload error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      dataType,
+      csvContentLength: csvContent?.length || 0
+    })
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({ 
         error: 'Upload failed',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
+        dataType
       }),
     }
   }
