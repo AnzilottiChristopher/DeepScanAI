@@ -10,6 +10,10 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey)
 const openai = openaiApiKey ? new OpenAI({ apiKey: openaiApiKey }) : null
 
 export const handler: Handler = async (event, context) => {
+  console.log('AI Chat function called')
+  console.log('OpenAI API Key present:', !!openaiApiKey)
+  console.log('OpenAI client initialized:', !!openai)
+  
   const headers = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -31,8 +35,11 @@ export const handler: Handler = async (event, context) => {
 
   try {
     const { message, context: userContext } = JSON.parse(event.body || '{}')
+    console.log('Parsed message:', message)
+    console.log('User context:', userContext)
 
     if (!message || message.trim() === '') {
+      console.log('Empty message provided')
       return {
         statusCode: 400,
         headers,
@@ -42,6 +49,7 @@ export const handler: Handler = async (event, context) => {
 
     // If OpenAI is not configured, provide basic responses
     if (!openai) {
+      console.log('Using mock responses (no OpenAI)')
       let response = "I'm analyzing your request..."
       
       if (message.toLowerCase().includes('inventory')) {
@@ -77,6 +85,9 @@ export const handler: Handler = async (event, context) => {
     // Get current data context
     const { data: patients } = await supabase.from('patients').select('*').limit(100)
     const { data: inventory } = await supabase.from('inventory').select('*').limit(100)
+    
+    console.log('Fetched patients:', patients?.length || 0)
+    console.log('Fetched inventory:', inventory?.length || 0)
 
     const systemPrompt = `You are DeepScanRx, an AI assistant for healthcare analytics.
 
@@ -91,6 +102,8 @@ Database schema:
 Provide insights and recommendations for hospital pharmacy management based on the user's query.
 Be professional, actionable, and focus on practical healthcare analytics.`
 
+    console.log('Making OpenAI API call...')
+    
     const completion = await openai.chat.completions.create({
       model: "gpt-4",
       messages: [
@@ -101,6 +114,7 @@ Be professional, actionable, and focus on practical healthcare analytics.`
       max_tokens: 1000
     })
 
+    console.log('OpenAI API call successful')
     const aiResponse = completion.choices[0].message.content?.trim() || "I'm sorry, I couldn't process your request."
 
     return {
@@ -123,12 +137,18 @@ Be professional, actionable, and focus on practical healthcare analytics.`
     }
   } catch (error) {
     console.error('AI Chat error:', error)
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    })
+    
     return {
       statusCode: 500,
       headers,
       body: JSON.stringify({
         response: {
-          text: "I'm currently experiencing technical difficulties. Please try a simpler query or check back later.",
+          text: `I'm currently experiencing technical difficulties: ${error.message}. Please try a simpler query or check back later.`,
           action: null,
           suggestions: [
             "Show inventory summary",
@@ -137,6 +157,7 @@ Be professional, actionable, and focus on practical healthcare analytics.`
           ]
         },
         error: true,
+        errorDetails: error.message,
         timestamp: new Date().toISOString()
       }),
     }
