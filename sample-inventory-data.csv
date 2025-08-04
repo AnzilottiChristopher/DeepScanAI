@@ -1,0 +1,28 @@
+drug_name,quantity,unit_cost,expiry_date,supplier,category
+Lisinopril,85,12.50,2025-06-30,PharmaCorp,Cardiovascular
+Metformin,320,8.75,2025-12-31,MediSupply,Diabetes
+Amoxicillin,150,15.20,2024-08-15,PharmaCorp,Antibiotics
+Insulin,25,45.00,2024-12-31,DiabetesCare,Diabetes
+Atorvastatin,200,22.30,2025-03-15,CardioMeds,Cardiovascular
+Hydrochlorothiazide,45,9.80,2024-10-30,PharmaCorp,Cardiovascular
+Albuterol,75,18.50,2025-01-20,RespiratoryCare,Respiratory
+Sertraline,110,16.75,2025-09-10,MentalHealthMeds,Mental Health
+Metoprolol,95,14.25,2025-05-15,CardioMeds,Cardiovascular
+Lorazepam,30,24.80,2024-11-30,MentalHealthMeds,Mental Health
+Prednisone,60,11.40,2025-02-28,PharmaCorp,Anti-inflammatory
+Sumatriptan,40,35.60,2025-07-15,NeurologyCare,Neurology
+Propranolol,80,13.90,2025-04-20,CardioMeds,Cardiovascular
+Ibuprofen,200,6.25,2025-08-31,PharmaCorp,Pain Relief
+Methotrexate,15,28.75,2024-12-15,RheumatologyCare,Immunosuppressant
+Fluoxetine,90,19.50,2025-06-10,MentalHealthMeds,Mental Health
+Trazodone,55,21.30,2025-03-25,MentalHealthMeds,Mental Health
+Warfarin,70,17.80,2025-01-31,CardioMeds,Anticoagulant
+Digoxin,35,26.40,2024-09-30,CardioMeds,Cardiovascular
+Ciprofloxacin,120,13.75,2025-05-20,PharmaCorp,Antibiotics
+Phenazopyridine,45,22.10,2024-12-10,UrologyMeds,Urinary
+Ezetimibe,65,31.25,2025-08-15,CardioMeds,Cardiovascular
+Alendronate,50,29.90,2025-11-30,BoneCare,Bone Health
+Calcium,180,8.50,2026-01-15,NutritionSupply,Supplements
+Fluticasone,85,27.60,2025-04-30,RespiratoryCare,Respiratory
+Levothyroxine,140,12.80,2025-10-20,EndocrineMeds,Endocrine
+Methimazole,25,33.70,2024-11-15,EndocrineMeds,Endocrine
